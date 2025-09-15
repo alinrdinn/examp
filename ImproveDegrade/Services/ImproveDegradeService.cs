@@ -22,14 +22,14 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
 
         public async Task<List<ImproveDegradeResponse>> GetImproveDegrade(ImproveDegradeRequest request)
         {
-            var cacheKey = $"ImproveDegrade_GetImproveDegrade_{request.Yearweek}_{request.Source}";
+            var cacheKey = $"ImproveDegrade_GetImproveDegrade_{request.Yearweek}_{request.Level}_{request.Location}_{request.Source}";
 
             if (_cache.TryGetValue(cacheKey, out List<ImproveDegradeResponse> cachedResult))
             {
                 return cachedResult;
             }
 
-            var rows = await _repo.GetAreaWinLose(request.Yearweek!.Value, "nation", "nationwide", request.Source!);
+            var rows = await _repo.GetAreaWinLose(request.Yearweek!.Value, request.Level!, request.Location!, request.Source!);
 
             var data = new List<ImproveDegradeResponse>();
 
@@ -173,11 +173,11 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
             row++;
             
             worksheet.Cell(row, 1).Value = "Level";
-            worksheet.Cell(row, 2).Value = "nation";
+            worksheet.Cell(row, 2).Value = request.Level;
             row++;
             
             worksheet.Cell(row, 1).Value = "Location";
-            worksheet.Cell(row, 2).Value = "nationwide";
+            worksheet.Cell(row, 2).Value = request.Location;
             row++;
             
             worksheet.Cell(row, 1).Value = "Source";

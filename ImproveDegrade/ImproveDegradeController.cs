@@ -31,7 +31,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade
         public async Task<IActionResult> DownloadWinLoseExcel([FromQuery] ImproveDegradeRequest request)
         {
             var excelData = await _service.GenerateWinLoseExcelFile(request);
-            var fileName = $"ImproveDegrade_Report_{request.Yearweek}.xlsx";
+            var fileName = $"ImproveDegrade_{request.Level}_{request.Location}_{request.Yearweek}.xlsx";
             
             return File(excelData, 
                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
