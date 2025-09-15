@@ -5,16 +5,19 @@ using ExecutiveDashboard.Modules.Summary.Data.Entities;
 using ExecutiveDashboard.Modules.Summary.Dtos.Requests;
 using ExecutiveDashboard.Modules.Summary.Dtos.Responses;
 using ExecutiveDashboard.Modules.Summary.Repositories;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExecutiveDashboard.Modules.Summary.Services
 {
     public class SummaryService : ISummaryService
     {
         private readonly ISummaryRepository _repo;
+        private readonly IMemoryCache _cache;
 
-        public SummaryService(ISummaryRepository repo)
+        public SummaryService(ISummaryRepository repo, IMemoryCache cache)
         {
             _repo = repo;
+            _cache = cache;
         }
 
         private GapMetric MapGapMetric(List<SummaryGapModel> rows, string category)
@@ -41,6 +44,13 @@ namespace ExecutiveDashboard.Modules.Summary.Services
 
         public async Task<SummaryResponse> GetSummary(SummaryRequest request)
         {
+            var cacheKey = $"Summary_GetSummary_{request.Yearweek}_{request.Level}_{request.Location}";
+
+            if (_cache.TryGetValue(cacheKey, out SummaryResponse cachedResult))
+            {
+                return cachedResult;
+            }
+
             // Total Win
             var rows = await _repo.GetSummary(request.Yearweek, request.Level, request.Location);
 
@@ -159,6 +169,7 @@ namespace ExecutiveDashboard.Modules.Summary.Services
                 response.GapToH1 = new List<GapMetric>();
             }
 
+            _cache.Set(cacheKey, response, TimeSpan.FromMinutes(5));
             return response;
         }
 

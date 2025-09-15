@@ -3,20 +3,30 @@ using ExecutiveDashboard.Modules.OLOPerformance.Dtos.Requests;
 using ExecutiveDashboard.Modules.OLOPerformance.Dtos.Responses;
 using ExecutiveDashboard.Modules.OLOPerformance.Repositories;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExecutiveDashboard.Modules.OLOPerformance.Services
 {
     public class OLOPerformanceService : IOLOPerformanceService
     {
         private readonly IOLOPerformanceRepository _repo;
+        private readonly IMemoryCache _cache;
 
-        public OLOPerformanceService(IOLOPerformanceRepository repo)
+        public OLOPerformanceService(IOLOPerformanceRepository repo, IMemoryCache cache)
         {
             _repo = repo;
+            _cache = cache;
         }
 
         public async Task<OLOPerformanceResponse> GetOloPerformance(OLOPerformanceRequest request)
         {
+            var cacheKey = $"OLOPerformance_GetOloPerformance_{request.Yearweek}_{request.Level}_{request.Location}";
+
+            if (_cache.TryGetValue(cacheKey, out OLOPerformanceResponse cachedResult))
+            {
+                return cachedResult;
+            }
+
             var rows = await _repo.GetOloPerformance(request.Yearweek, request.Level, request.Location);
 
             
@@ -78,7 +88,7 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
                 .OrderByDescending(x => (x.Os ?? 0) + (x.Ookla ?? 0))
                 .ToList();
 
-            return new OLOPerformanceResponse
+            var result = new OLOPerformanceResponse
             {
                 OperatorWin = operatorWin,
                 SourceWin = new SourceWin
@@ -88,6 +98,9 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
                 },
                 OtherOperator = others
             };
+
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
 
         public async Task<XLWorkbook> GenerateOloPerformanceWorkbook(OLOPerformanceRequest request)

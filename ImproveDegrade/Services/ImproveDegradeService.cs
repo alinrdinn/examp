@@ -4,21 +4,31 @@ using ExecutiveDashboard.Modules.ImproveDegrade.Dtos.Responses;
 using ExecutiveDashboard.Modules.ImproveDegrade.Repositories;
 using ClosedXML.Excel;
 using System.Drawing;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
 {
     public class ImproveDegradeService : IImproveDegradeService
     {
         private readonly IImproveDegradeRepository _repo;
+        private readonly IMemoryCache _cache;
 
-        public ImproveDegradeService(IImproveDegradeRepository repo)
+        public ImproveDegradeService(IImproveDegradeRepository repo, IMemoryCache cache)
         {
             _repo = repo;
+            _cache = cache;
         }
 
 
         public async Task<List<ImproveDegradeResponse>> GetImproveDegrade(ImproveDegradeRequest request)
         {
+            var cacheKey = $"ImproveDegrade_GetImproveDegrade_{request.Yearweek}_{request.Source}";
+
+            if (_cache.TryGetValue(cacheKey, out List<ImproveDegradeResponse> cachedResult))
+            {
+                return cachedResult;
+            }
+
             var rows = await _repo.GetAreaWinLose(request.Yearweek!.Value, "nation", "nationwide", request.Source!);
 
             var data = new List<ImproveDegradeResponse>();
@@ -38,6 +48,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
                 data.Add(detail);
             }
 
+            _cache.Set(cacheKey, data, TimeSpan.FromMinutes(5));
             return data;
         }
 

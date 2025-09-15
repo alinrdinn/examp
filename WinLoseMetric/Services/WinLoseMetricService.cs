@@ -3,20 +3,30 @@ using ExecutiveDashboard.Modules.WinLoseMetric.Dtos.Requests;
 using ExecutiveDashboard.Modules.WinLoseMetric.Dtos.Responses;
 using ExecutiveDashboard.Modules.WinLoseMetric.Repositories;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExecutiveDashboard.Modules.WinLoseMetric.Services
 {
     public class WinLoseMetricService : IWinLoseMetricService
     {
         private readonly IWinLoseMetricRepository _repo;
+        private readonly IMemoryCache _cache;
 
-        public WinLoseMetricService(IWinLoseMetricRepository repo)
+        public WinLoseMetricService(IWinLoseMetricRepository repo, IMemoryCache cache)
         {
             _repo = repo;
+            _cache = cache;
         }
 
         public async Task<WinLoseMetricResponse> GetWinLoseMetrics(WinLoseMetricRequest request)
         {
+            var cacheKey = $"WinLoseMetric_GetWinLoseMetrics_{request.Yearweek}_{request.Level}_{request.Location}_{request.Source}_{request.Status}";
+
+            if (_cache.TryGetValue(cacheKey, out WinLoseMetricResponse cachedResult))
+            {
+                return cachedResult;
+            }
+
             var rows = await _repo.GetWinLoseMetrics(
                 request.Yearweek,
                 request.Level,
@@ -48,6 +58,7 @@ namespace ExecutiveDashboard.Modules.WinLoseMetric.Services
                     .ToList(),
             };
 
+            _cache.Set(cacheKey, response, TimeSpan.FromMinutes(5));
             return response;
         }
 

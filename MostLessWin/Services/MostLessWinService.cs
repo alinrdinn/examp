@@ -4,20 +4,29 @@ using ExecutiveDashboard.Modules.MostLessWin.Dtos.Responses;
 using ExecutiveDashboard.Modules.MostLessWin.Repositories;
 using ClosedXML.Excel;
 using System.Drawing;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ExecutiveDashboard.Modules.MostLessWin.Services
 {
     public class MostLessWinService : IMostLessWinService
     {
         private readonly IMostLessWinRepository _repo;
+        private readonly IMemoryCache _cache;
 
-        public MostLessWinService(IMostLessWinRepository repo)
+        public MostLessWinService(IMostLessWinRepository repo, IMemoryCache cache)
         {
             _repo = repo;
+            _cache = cache;
         }
 
         public async Task<MostLessWinResponse> GetMostLessWin(MostLessWinRequest request)
         {
+            var cacheKey = $"MostLessWin_GetMostLessWin_{request.Yearweek}_{request.Level}_{request.Location}_{request.Source}";
+
+            if (_cache.TryGetValue(cacheKey, out MostLessWinResponse cachedResult))
+            {
+                return cachedResult;
+            }
 
             var rows = await _repo.GetMostWinForLatestWeek(request.Yearweek!.Value, request.Level!, request.Location!, request.Source!);
 
@@ -31,7 +40,7 @@ namespace ExecutiveDashboard.Modules.MostLessWin.Services
                 .OrderBy(r => r.win ?? int.MaxValue)
                 .FirstOrDefault();
 
-            return new MostLessWinResponse
+            var result = new MostLessWinResponse
             {
                 MostWinRegion = mostWin?.location,
                 MostWinCount = mostWin?.win,
@@ -40,6 +49,9 @@ namespace ExecutiveDashboard.Modules.MostLessWin.Services
                 LessWinCount = lessWin?.win,
                 LessWinOutOf = lessWin?.total
             };
+
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+            return result;
         }
 
         public async Task<XLWorkbook> GenerateWinLoseMetricsWorkbook(MostLessWinRequest request)
