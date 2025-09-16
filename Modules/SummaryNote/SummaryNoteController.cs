@@ -28,6 +28,22 @@ namespace ExecutiveDashboard.Modules.SummaryNote
             return Ok(response);
         }
 
+        [HttpGet("excel")]
+        public async Task<IActionResult> DownloadSummaryNotes(
+            [FromQuery] SummaryNoteQueryRequest request
+        )
+        {
+            var excelBytes = await _service.GenerateSummaryNotesExcelFile(request);
+
+            var fileName = $"SummaryNotes_{request.Yearweek?.ToString() ?? "all"}.xlsx";
+
+            return File(
+                excelBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName
+            );
+        }
+
         [HttpPost]
         public async Task<ActionResult<BaseResponse>> CreateSummaryNote(
             [FromBody] CreateSummaryNoteRequest request
