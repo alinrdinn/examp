@@ -1,3 +1,4 @@
+using ExecutiveDashboard.Modules.ExcelExport;
 using ExecutiveDashboard.Modules.ExecutiveDashboard;
 using ExecutiveDashboard.Modules.ImproveDegrade;
 using ExecutiveDashboard.Modules.MostLessWin;
@@ -19,6 +20,7 @@ namespace ExecutiveDashboard.Modules
             services.AddSummaryModule();
             services.AddSummaryNoteModule();
             services.AddImproveDegradeModule();
+            services.AddExcelExportModule();
 
             return services;
         }

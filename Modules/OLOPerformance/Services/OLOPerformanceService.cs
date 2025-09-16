@@ -164,7 +164,11 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
             return response;
         }
 
-        public async Task<XLWorkbook> GenerateOloPerformanceWorkbook(OLOPerformanceRequest request)
+        public async Task<IXLWorksheet> CreateOloPerformanceWorksheet(
+            XLWorkbook workbook,
+            OLOPerformanceRequest request,
+            string? worksheetName = null
+        )
         {
             var rows = await _repo.GetOloPerformance(
                 request.Yearweek,
@@ -177,8 +181,11 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
                 throw new NotFoundException("not_found");
             }
 
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("OLO Performance");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "OLO Performance"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             // Add Metadata Section
             var currentRow = 1;
@@ -231,6 +238,13 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
             // Auto-fit columns
             worksheet.Columns().AdjustToContents();
 
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateOloPerformanceWorkbook(OLOPerformanceRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateOloPerformanceWorksheet(workbook, request);
             return workbook;
         }
 
@@ -242,14 +256,19 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
             return stream.ToArray();
         }
 
-        public async Task<XLWorkbook> GenerateOloPerformanceSummaryWorkbook(
-            OLOPerformanceRequest request
+        public async Task<IXLWorksheet> CreateOloPerformanceSummaryWorksheet(
+            XLWorkbook workbook,
+            OLOPerformanceRequest request,
+            string? worksheetName = null
         )
         {
             var summary = await GetOloPerformanceSummary(request);
 
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("OLO Performance Summary");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "OLO Performance Summary"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             int currentRow = 1;
 
@@ -336,6 +355,15 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
 
             worksheet.Columns().AdjustToContents();
 
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateOloPerformanceSummaryWorkbook(
+            OLOPerformanceRequest request
+        )
+        {
+            var workbook = new XLWorkbook();
+            await CreateOloPerformanceSummaryWorksheet(workbook, request);
             return workbook;
         }
 

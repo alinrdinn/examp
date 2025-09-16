@@ -174,13 +174,20 @@ namespace ExecutiveDashboard.Modules.Summary.Services
             return response;
         }
 
-        public async Task<XLWorkbook> GenerateSummaryWorkbook(SummaryRequest request)
+        public async Task<IXLWorksheet> CreateSummaryWorksheet(
+            XLWorkbook workbook,
+            SummaryRequest request,
+            string? worksheetName = null
+        )
         {
             // Ambil data dari service yang sudah ada
             var summary = await GetSummary(request);
 
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("Summary");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "Summary"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             // === Metadata ===
             worksheet.Range("A1:B1").Merge().Value = "Metadata";
@@ -285,6 +292,13 @@ namespace ExecutiveDashboard.Modules.Summary.Services
 
             worksheet.Columns().AdjustToContents();
 
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateSummaryWorkbook(SummaryRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateSummaryWorksheet(workbook, request);
             return workbook;
         }
 

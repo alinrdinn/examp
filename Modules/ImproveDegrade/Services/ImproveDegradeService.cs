@@ -182,13 +182,20 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
             return s.Trim().TrimEnd('.', ',').Trim();
         }
 
-        public async Task<XLWorkbook> GenerateWinLoseWorkbook(ImproveDegradeRequest request)
+        public async Task<IXLWorksheet> CreateWinLoseWorksheet(
+            XLWorkbook workbook,
+            ImproveDegradeRequest request,
+            string? worksheetName = null
+        )
         {
             // Get data from existing service method
             var data = await GetImproveDegrade(request);
 
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("ImproveDegrade Report");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "ImproveDegrade Report"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             int currentRow = 1;
 
@@ -210,6 +217,13 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
             // Auto-fit columns
             worksheet.Columns().AdjustToContents();
 
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateWinLoseWorkbook(ImproveDegradeRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateWinLoseWorksheet(workbook, request);
             return workbook;
         }
 
