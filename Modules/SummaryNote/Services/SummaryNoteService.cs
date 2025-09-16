@@ -35,12 +35,19 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
             };
         }
 
-        public async Task<XLWorkbook> GenerateSummaryNotesWorkbook(SummaryNoteQueryRequest request)
+        public async Task<IXLWorksheet> CreateSummaryNotesWorksheet(
+            XLWorkbook workbook,
+            SummaryNoteQueryRequest request,
+            string? worksheetName = null
+        )
         {
             var summaryNotes = await GetSummaryNotes(request);
 
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("SummaryNotes");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "SummaryNotes"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             worksheet.Range("A1:B1").Merge().Value = "Metadata";
             worksheet.Range("A1:B1").Style.Font.Bold = true;
@@ -83,7 +90,7 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
 
             worksheet.Columns().AdjustToContents();
 
-            return workbook;
+            return worksheet;
         }
 
         public Task CreateSummaryNote(CreateSummaryNoteRequest request)
@@ -94,6 +101,13 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
         public Task UpdateSummaryNote(int id, UpdateSummaryNoteRequest request)
         {
             return _repository.UpdateSummaryNote(id, request.Yearweek, request.Detail);
+        }
+
+        public async Task<XLWorkbook> GenerateSummaryNotesWorkbook(SummaryNoteQueryRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateSummaryNotesWorksheet(workbook, request);
+            return workbook;
         }
 
         public async Task<byte[]> GenerateSummaryNotesExcelFile(SummaryNoteQueryRequest request)

@@ -58,7 +58,11 @@ namespace ExecutiveDashboard.Modules.MostLessWin.Services
             return result;
         }
 
-        public async Task<XLWorkbook> GenerateWinLoseMetricsWorkbook(MostLessWinRequest request)
+        public async Task<IXLWorksheet> CreateWinLoseMetricsWorksheet(
+            XLWorkbook workbook,
+            MostLessWinRequest request,
+            string? worksheetName = null
+        )
         {
             // Get data from repository
             var data = await _repo.GetMostWinForLatestWeek(
@@ -68,9 +72,11 @@ namespace ExecutiveDashboard.Modules.MostLessWin.Services
                 request.Source!
             );
 
-            // Create new workbook
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("WinLoseMetrics");
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "WinLoseMetrics"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
 
             // Add metadata section
             worksheet.Cell(1, 1).Value = "Win/Lose Metrics Report";
@@ -138,6 +144,13 @@ namespace ExecutiveDashboard.Modules.MostLessWin.Services
             // Auto-fit columns
             worksheet.Columns().AdjustToContents();
 
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateWinLoseMetricsWorkbook(MostLessWinRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateWinLoseMetricsWorksheet(workbook, request);
             return workbook;
         }
 

@@ -62,17 +62,23 @@ namespace ExecutiveDashboard.Modules.WinLoseMetric.Services
             return response;
         }
 
-        public async Task<XLWorkbook> GenerateWinLoseMetricsWorkbook(WinLoseMetricRequest request)
+        public async Task<IXLWorksheet> CreateWinLoseMetricsWorksheet(
+            XLWorkbook workbook,
+            WinLoseMetricRequest request,
+            string? worksheetName = null
+        )
         {
             // Get data using existing method
             var response = await GetWinLoseMetrics(request);
-            
-            // Create new workbook and worksheet
-            var workbook = new XLWorkbook();
-            var worksheet = workbook.Worksheets.Add("WinLoseMetrics");
-            
+
+            var worksheetNameToUse = string.IsNullOrWhiteSpace(worksheetName)
+                ? "WinLoseMetrics"
+                : worksheetName;
+
+            var worksheet = workbook.Worksheets.Add(worksheetNameToUse);
+
             int currentRow = 1;
-            
+
             // Section 1: Metadata
             worksheet.Range("A1:B1").Merge().Value = "Metadata";
             worksheet.Range("A1:B1").Style.Font.Bold = true;
@@ -141,10 +147,17 @@ namespace ExecutiveDashboard.Modules.WinLoseMetric.Services
             
             // Auto-fit columns
             worksheet.Columns().AdjustToContents();
-            
+
+            return worksheet;
+        }
+
+        public async Task<XLWorkbook> GenerateWinLoseMetricsWorkbook(WinLoseMetricRequest request)
+        {
+            var workbook = new XLWorkbook();
+            await CreateWinLoseMetricsWorksheet(workbook, request);
             return workbook;
         }
-        
+
         public async Task<byte[]> GenerateWinLoseMetricsExcelFile(WinLoseMetricRequest request)
         {
             using var workbook = await GenerateWinLoseMetricsWorkbook(request);
