@@ -8,5 +8,6 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
         Task<SummaryNoteListResponse> GetSummaryNotes(SummaryNoteQueryRequest request);
         Task CreateSummaryNote(CreateSummaryNoteRequest request);
         Task UpdateSummaryNote(int id, UpdateSummaryNoteRequest request);
+        Task<byte[]> GenerateSummaryNotesExcelFile(SummaryNoteQueryRequest request);
     }
 }
