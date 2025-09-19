@@ -57,7 +57,7 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
 
                 var score = row?.win ?? 0;
                 var wowPct = $"{Math.Round(((row?.wow) ?? 0d), 0)}%";
-                var status = string.Equals(row?.remark, "UP", StringComparison.OrdinalIgnoreCase);
+                var status = row?.remark;
 
                 return new PlatformWin
                 {

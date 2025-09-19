@@ -19,7 +19,7 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Dtos.Responses
     {
         public int? Score { get; set; }
         public string? Wow { get; set; }
-        public bool? Status { get; set; }
+        public string? Status { get; set; }
     }
 
     public class OtherOperatorItem
