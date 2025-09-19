@@ -125,34 +125,55 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
 
             var first = rows.First();
 
+            var openSignalMetrics = rows
+                .Where(r => r.platform?.ToLower() == "opensignal" || r.platform?.ToLower() == "os")
+                .Select(r => new OLOPerformanceMetric
+                {
+                    Title = r.metric,
+                    Score = r.value,
+                    Wow = r.wow.HasValue ? $"{r.wow:0.##}%" : null,
+                    GapWithTelkomsel = r.gap_telkomsel.HasValue ? r.gap_telkomsel.Value.ToString("0.##") : null,
+                    StatusWow = r.status_wow,
+                    StatusGap = r.status_gap
+                })
+                .ToList();
+
+            var ooklaMetrics = rows
+                .Where(r => r.platform?.ToLower() == "ookla")
+                .Select(r => new OLOPerformanceMetric
+                {
+                    Title = r.metric,
+                    Score = r.value,
+                    Wow = r.wow.HasValue ? $"{r.wow:0.##}%" : null,
+                    GapWithTelkomsel = r.gap_telkomsel.HasValue ? r.gap_telkomsel.Value.ToString("0.##") : null,
+                    StatusWow = r.status_wow,
+                    StatusGap = r.status_gap
+                })
+                .ToList();
+
+            var openSignalSummaries = rows
+                .Where(r => (r.platform?.ToLower() == "opensignal" || r.platform?.ToLower() == "os") && !string.IsNullOrEmpty(r.summary))
+                .Select(r => r.summary)
+                .ToList();
+
+            var ooklaSummaries = rows
+                .Where(r => r.platform?.ToLower() == "ookla" && !string.IsNullOrEmpty(r.summary))
+                .Select(r => r.summary)
+                .ToList();
+
             var response = new OLOPerformanceSummaryResponse
             {
                 Operator = first.@operator,
-                OpenSignal = rows.Where(r =>
-                        r.platform?.ToLower() == "opensignal" || r.platform?.ToLower() == "os"
-                    )
-                    .Select(r => new OLOPerformanceDetail
-                    {
-                        Title = r.metric,
-                        Score = r.value,
-                        Improvement = r.wow.HasValue ? $"{r.wow:0.##}%" : null,
-                        GapWithTelkomsel = r.gap_telkomsel.HasValue
-                            ? $"{r.gap_telkomsel:0.##}%"
-                            : null,
-                    })
-                    .FirstOrDefault(),
-                Ookla = rows.Where(r => r.platform?.ToLower() == "ookla")
-                    .Select(r => new OLOPerformanceDetail
-                    {
-                        Title = r.metric,
-                        Score = r.value,
-                        Improvement = r.wow.HasValue ? $"{r.wow:0.##}%" : null,
-                        GapWithTelkomsel = r.gap_telkomsel.HasValue
-                            ? $"{r.gap_telkomsel:0.##}%"
-                            : null,
-                    })
-                    .FirstOrDefault(),
-                Summary = rows.Select(r => r.summary ?? string.Empty).ToList(),
+                OpenSignal = new OLOPerformancePlatformSummary
+                {
+                    Metrics = openSignalMetrics,
+                    Summary = openSignalSummaries
+                },
+                Ookla = new OLOPerformancePlatformSummary
+                {
+                    Metrics = ooklaMetrics,
+                    Summary = ooklaSummaries
+                }
             };
 
             return response;
@@ -296,20 +317,46 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
             worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
             currentRow++;
 
-            worksheet.Cell(currentRow, 1).Value = "Title";
-            worksheet.Cell(currentRow, 2).Value = summary.OpenSignal?.Title;
-            currentRow++;
+            if (summary.OpenSignal?.Metrics != null && summary.OpenSignal.Metrics.Any())
+            {
+                var openSignalMetric = summary.OpenSignal.Metrics.First();
+                worksheet.Cell(currentRow, 1).Value = "Title";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.Title;
+                currentRow++;
 
-            worksheet.Cell(currentRow, 1).Value = "Score";
-            worksheet.Cell(currentRow, 2).Value = summary.OpenSignal?.Score;
-            currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Score";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.Score;
+                currentRow++;
 
-            worksheet.Cell(currentRow, 1).Value = "Improvement";
-            worksheet.Cell(currentRow, 2).Value = summary.OpenSignal?.Improvement;
-            currentRow++;
+                worksheet.Cell(currentRow, 1).Value = "Wow";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.Wow;
+                currentRow++;
 
-            worksheet.Cell(currentRow, 1).Value = "Gap With Telkomsel";
-            worksheet.Cell(currentRow, 2).Value = summary.OpenSignal?.GapWithTelkomsel;
+                worksheet.Cell(currentRow, 1).Value = "Gap With Telkomsel";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.GapWithTelkomsel;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Status Wow";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.StatusWow;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Status Gap";
+                worksheet.Cell(currentRow, 2).Value = openSignalMetric.StatusGap;
+                currentRow++;
+            }
+
+            if (summary.OpenSignal?.Summary != null && summary.OpenSignal.Summary.Any())
+            {
+                worksheet.Cell(currentRow, 1).Value = "Summary";
+                worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
+                currentRow++;
+                foreach (var line in summary.OpenSignal.Summary)
+                {
+                    worksheet.Cell(currentRow, 1).Value = line;
+                    currentRow++;
+                }
+            }
+
             currentRow += 2;
 
             // === Ookla Section ===
@@ -317,30 +364,40 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
             worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
             currentRow++;
 
-            worksheet.Cell(currentRow, 1).Value = "Title";
-            worksheet.Cell(currentRow, 2).Value = summary.Ookla?.Title;
-            currentRow++;
-
-            worksheet.Cell(currentRow, 1).Value = "Score";
-            worksheet.Cell(currentRow, 2).Value = summary.Ookla?.Score;
-            currentRow++;
-
-            worksheet.Cell(currentRow, 1).Value = "Improvement";
-            worksheet.Cell(currentRow, 2).Value = summary.Ookla?.Improvement;
-            currentRow++;
-
-            worksheet.Cell(currentRow, 1).Value = "Gap With Telkomsel";
-            worksheet.Cell(currentRow, 2).Value = summary.Ookla?.GapWithTelkomsel;
-            currentRow += 2;
-
-            // === Summary Section ===
-            worksheet.Cell(currentRow, 1).Value = "Summary";
-            worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
-            currentRow++;
-
-            if (summary.Summary != null && summary.Summary.Any())
+            if (summary.Ookla?.Metrics != null && summary.Ookla.Metrics.Any())
             {
-                foreach (var line in summary.Summary)
+                var ooklaMetric = summary.Ookla.Metrics.First();
+                worksheet.Cell(currentRow, 1).Value = "Title";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.Title;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Score";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.Score;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Wow";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.Wow;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Gap With Telkomsel";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.GapWithTelkomsel;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Status Wow";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.StatusWow;
+                currentRow++;
+
+                worksheet.Cell(currentRow, 1).Value = "Status Gap";
+                worksheet.Cell(currentRow, 2).Value = ooklaMetric.StatusGap;
+                currentRow++;
+            }
+
+            if (summary.Ookla?.Summary != null && summary.Ookla.Summary.Any())
+            {
+                worksheet.Cell(currentRow, 1).Value = "Summary";
+                worksheet.Cell(currentRow, 1).Style.Font.Bold = true;
+                currentRow++;
+                foreach (var line in summary.Ookla.Summary)
                 {
                     worksheet.Cell(currentRow, 1).Value = line;
                     currentRow++;
