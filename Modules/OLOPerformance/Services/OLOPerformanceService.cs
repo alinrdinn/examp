@@ -56,7 +56,7 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
                 );
 
                 var score = row?.win ?? 0;
-                var wowPct = $"{Math.Round(((row?.wow) ?? 0d) * 100d, 0)}%";
+                var wowPct = $"{Math.Round(((row?.wow) ?? 0d), 0)}%";
                 var status = string.Equals(row?.remark, "UP", StringComparison.OrdinalIgnoreCase);
 
                 return new PlatformWin
@@ -120,13 +120,7 @@ namespace ExecutiveDashboard.Modules.OLOPerformance.Services
 
             if (!rows.Any())
             {
-                return new OLOPerformanceSummaryResponse
-                {
-                    Operator = null,
-                    OpenSignal = null,
-                    Ookla = null,
-                    Summary = new List<string>(),
-                };
+                throw new NotFoundException("not_found");
             }
 
             var first = rows.First();

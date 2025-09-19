@@ -6,7 +6,6 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Dtos.Responses
     {
         public int Id { get; init; }
         public string? Detail { get; init; }
-        public string? Region { get; init; }
     }
 
     public class SummaryNoteListResponse

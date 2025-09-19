@@ -34,7 +34,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Dtos.Responses
         public int Score { get; set; }
         public int Lose { get; set; }
         public double? Percentage { get; set; }
-        public string Status { get; set; } = "IMPROVE";
+        public string? Status { get; set; }
         public ImproveGroup Improve { get; set; } = new();
         public ImproveGroup Degrade { get; set; } = new();
         public ImproveGroup Maintain { get; set; } = new();

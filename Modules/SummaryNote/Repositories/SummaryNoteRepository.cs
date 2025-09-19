@@ -17,7 +17,8 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Repositories
 
         public async Task<List<SummaryNoteEntity>> GetSummaryNotes(int? yearweek)
         {
-            const string sql = "select * from semb.get_executive_dashboard_summary_card(@yearweek);";
+            const string sql =
+                "select * from semb.get_executive_dashboard_summary_card(@yearweek);";
 
             var parameters = new[]
             {

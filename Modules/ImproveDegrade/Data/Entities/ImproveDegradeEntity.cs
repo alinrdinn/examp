@@ -12,6 +12,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Data.Entities
         public int? win { get; set; }
         public int? lose { get; set; }
         public double? percentage { get; set; }
+        public string? remark_area { get; set; }
     }
 
     [Keyless]

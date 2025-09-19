@@ -51,7 +51,7 @@ namespace ExecutiveDashboard.Modules.SummaryNote
         {
             await _service.CreateSummaryNote(request);
 
-            var response = BaseResponse.ToResponse(201, true, null, null);
+            var response = BaseResponse.ToResponse<object>(201, true, null, null);
             return StatusCode(StatusCodes.Status201Created, response);
         }
 
@@ -63,7 +63,7 @@ namespace ExecutiveDashboard.Modules.SummaryNote
         {
             await _service.UpdateSummaryNote(id, request);
 
-            var response = BaseResponse.ToResponse(200, true, null, null);
+            var response = BaseResponse.ToResponse<object>(200, true, null, null);
             return Ok(response);
         }
     }

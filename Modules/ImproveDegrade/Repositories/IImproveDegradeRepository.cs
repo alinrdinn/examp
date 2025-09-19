@@ -9,6 +9,5 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Repositories
             string source
         );
         Task<List<ImproveMaintainDegradeEntity>> GetRegionCityMappings(int yearweek, string source);
-        Task<List<AreaStatusEntity>> GetAreaStatusMappings(int yearweek, string source);
     }
 }

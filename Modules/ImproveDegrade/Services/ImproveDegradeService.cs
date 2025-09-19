@@ -29,8 +29,6 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
 
             var mapping = await _repo.GetRegionCityMappings(request.Yearweek!.Value, request.Source!);
 
-            var areaStatus = await _repo.GetAreaStatusMappings(request.Yearweek!.Value, request.Source);
-
 
             var data = new List<ImproveDegradeResponse>();
             foreach (var r in rows)
@@ -44,6 +42,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
                     Location = r.location,
                     Score = r.win ?? 0,
                     Lose = r.lose ?? 0,
+                    Status = r.remark_area,
                     Percentage = r.percentage,
                     Improve = improveGroup,
                     Degrade = degradeGroup,
@@ -122,7 +121,7 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Services
                     Score = item.Score,
                     Lose = item.Lose,
                     Percentage = item.Percentage,
-                    Status = areaStatus.FirstOrDefault(x => x.area == item.Location)?.remark_area,
+                    Status = item.Status,
                     Regions = ordered,
                     
                     Improve = item.Improve,

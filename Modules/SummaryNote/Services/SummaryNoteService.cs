@@ -19,20 +19,14 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
         {
             var rows = await _repository.GetSummaryNotes(request.Yearweek);
 
-            var items = rows
-                .Select(row => new SummaryNoteItemResponse
+            var items = rows.Select(row => new SummaryNoteItemResponse
                 {
                     Id = row.id,
                     Detail = row.summary?.Trim(),
-                    Region = string.Empty,
                 })
                 .ToList();
 
-            return new SummaryNoteListResponse
-            {
-                Total = items.Count,
-                SummarData = items,
-            };
+            return new SummaryNoteListResponse { Total = items.Count, SummarData = items };
         }
 
         public async Task<IXLWorksheet> CreateSummaryNotesWorksheet(
@@ -51,7 +45,8 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
 
             worksheet.Range("A1:B1").Merge().Value = "Metadata";
             worksheet.Range("A1:B1").Style.Font.Bold = true;
-            worksheet.Range("A1:B1").Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            worksheet.Range("A1:B1").Style.Alignment.Horizontal =
+                XLAlignmentHorizontalValues.Center;
 
             var currentRow = 2;
 
@@ -65,9 +60,8 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
 
             worksheet.Cell(currentRow, 1).Value = "ID";
             worksheet.Cell(currentRow, 2).Value = "Detail";
-            worksheet.Cell(currentRow, 3).Value = "Region";
 
-            var headerRange = worksheet.Range(currentRow, 1, currentRow, 3);
+            var headerRange = worksheet.Range(currentRow, 1, currentRow, 2);
             headerRange.Style.Font.Bold = true;
             headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
             headerRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
@@ -79,9 +73,8 @@ namespace ExecutiveDashboard.Modules.SummaryNote.Services
             {
                 worksheet.Cell(currentRow, 1).Value = note.Id;
                 worksheet.Cell(currentRow, 2).Value = note.Detail;
-                worksheet.Cell(currentRow, 3).Value = note.Region;
 
-                var dataRange = worksheet.Range(currentRow, 1, currentRow, 3);
+                var dataRange = worksheet.Range(currentRow, 1, currentRow, 2);
                 dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 

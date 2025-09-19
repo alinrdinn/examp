@@ -76,11 +76,13 @@ namespace ExecutiveDashboard.Modules.ExcelExport.Services
                 _summaryService.CreateSummaryWorksheet(workbook, summaryRequest, "Summary")
             );
 
-            await TryAddWorksheet(() => _summaryNoteService.CreateSummaryNotesWorksheet(
-                workbook,
-                new SummaryNoteQueryRequest { Yearweek = request.Yearweek },
-                "Summary Notes"
-            ));
+            await TryAddWorksheet(() =>
+                _summaryNoteService.CreateSummaryNotesWorksheet(
+                    workbook,
+                    new SummaryNoteQueryRequest { Yearweek = request.Yearweek },
+                    "Summary Notes"
+                )
+            );
 
             var oloRequest = new OLOPerformanceRequest
             {
@@ -126,19 +128,14 @@ namespace ExecutiveDashboard.Modules.ExcelExport.Services
                 await TryAddWorksheet(() =>
                     _improveDegradeService.CreateWinLoseWorksheet(
                         workbook,
-                        new ImproveDegradeRequest
-                        {
-                            Yearweek = request.Yearweek,
-                            Source = source,
-                        },
+                        new ImproveDegradeRequest { Yearweek = request.Yearweek, Source = source },
                         $"Improve Degrade {formattedSource}"
                     )
                 );
 
                 foreach (var status in Statuses)
                 {
-                    var worksheetName =
-                        $"Win Lose {formattedSource} {ToTitleCase(status)}";
+                    var worksheetName = $"Win Lose {formattedSource} {ToTitleCase(status)}";
 
                     await TryAddWorksheet(() =>
                         _winLoseMetricService.CreateWinLoseMetricsWorksheet(

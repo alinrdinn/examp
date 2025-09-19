@@ -61,32 +61,5 @@ namespace ExecutiveDashboard.Modules.ImproveDegrade.Repositories
                 .FromSqlRaw(sql, parameters)
                 .ToListAsync();
         }
-        
-        public async Task<List<AreaStatusEntity>> GetAreaStatusMappings(int yearweek, string source)
-        {
-            source = source switch
-            {
-                "ookla" => "ookla",
-                "open_signal" => "os",
-                _ => throw new ArgumentException("Invalid source or status")
-            };
-
-            const string sql = @"
-            select distinct area, remark_area
-            from semb.executive_dashboard_mapping_region_city(@yearweek, @source)
-            where remark_area IS NOT NULL
-            order by area, remark_area            
-            ";
-            var parameters = new[]
-            {
-                new NpgsqlParameter("yearweek", yearweek),
-                new NpgsqlParameter("source", source),
-            };
-
-            return await _context
-                .AreaStatusEntities
-                .FromSqlRaw(sql, parameters)
-                .ToListAsync();
-        }
     }
 }
