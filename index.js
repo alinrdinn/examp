@@ -2,47 +2,62 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const jwt = require('jsonwebtoken');
+const jwksRsa = require('jwks-rsa');
+const https = require('https');
 
-const PORT = process.env.PORT || 9003;
-const DATAHUB_TARGET = process.env.DATAHUB_TARGET || 'http://localhost:9002';
+const PORT = 9003;
+const DATAHUB_TARGET = 'http://localhost:9002';
 const LOGIN_PATH = '/sso/login';
-const TOKEN_COOKIE = process.env.TOKEN_COOKIE || 'datahub_proxy_jwt';
-const ACTOR_COOKIE = process.env.ACTOR_COOKIE || 'datahub_proxy_actor';
-const SECURE_COOKIES = (process.env.COOKIE_SECURE || '').toLowerCase() === 'true';
+const TOKEN_COOKIE = 'datahub_proxy_jwt';
+const ACTOR_COOKIE = 'datahub_proxy_actor';
+const SECURE_COOKIES = false;
+const ACTOR_CLAIM = null;
+
+const KEYCLOAK_BASE_URL = 'https://10.54.18.146/nic/authentication';
+const KEYCLOAK_REALM_NAME = 'SQM';
+const KEYCLOAK_CLIENT_ID = 'sqm-auth-service';
+const KEYCLOAK_ISSUER = `${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM_NAME}`;
+const JWT_ALGORITHMS = ['RS256'];
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const jwksClient = jwksRsa({
+  jwksUri: `${KEYCLOAK_ISSUER}/protocol/openid-connect/certs`,
+  requestAgent: httpsAgent,
+});
 
 const app = express();
 
 app.use(express.json());
 app.use(cookieParser());
 
-const formatKey = (key) =>
-  key && key.includes('-----BEGIN') ? key.replace(/\\n/g, '\n') : key;
+const getSigningKey = async (token) => {
+  const decoded = jwt.decode(token, { complete: true });
 
-const verifyToken = (token) => {
+  if (!decoded || !decoded.header?.kid) {
+    throw new Error('Token header does not contain a key identifier');
+  }
+
+  const signingKey = await jwksClient.getSigningKey(decoded.header.kid);
+  if (typeof signingKey.getPublicKey === 'function') {
+    return signingKey.getPublicKey();
+  }
+
+  return signingKey.publicKey || signingKey.rsaPublicKey;
+};
+
+const verifyToken = async (token) => {
   if (!token) {
     throw new Error('Missing token');
   }
 
-  const publicKey = formatKey(process.env.JWT_PUBLIC_KEY);
-  const secret = process.env.JWT_SECRET;
+  const publicKey = await getSigningKey(token);
 
-  if (publicKey) {
-    return jwt.verify(token, publicKey, {
-      algorithms: process.env.JWT_ALGORITHMS?.split(',') || ['RS256'],
-      audience: process.env.JWT_AUDIENCE,
-      issuer: process.env.JWT_ISSUER,
-    });
-  }
-
-  if (secret) {
-    return jwt.verify(token, secret, {
-      algorithms: process.env.JWT_ALGORITHMS?.split(',') || undefined,
-      audience: process.env.JWT_AUDIENCE,
-      issuer: process.env.JWT_ISSUER,
-    });
-  }
-
-  return jwt.decode(token);
+  return jwt.verify(token, publicKey, {
+    algorithms: JWT_ALGORITHMS,
+    audience: KEYCLOAK_CLIENT_ID,
+    issuer: KEYCLOAK_ISSUER,
+    ignoreExpiration: true,
+  });
 };
 
 const resolveActor = (claims) => {
@@ -50,7 +65,7 @@ const resolveActor = (claims) => {
     return null;
   }
 
-  const desiredClaim = process.env.ACTOR_CLAIM;
+  const desiredClaim = ACTOR_CLAIM;
   if (desiredClaim && claims[desiredClaim]) {
     return claims[desiredClaim];
   }
@@ -74,7 +89,7 @@ const clearAuthCookies = (res) => {
   res.clearCookie(ACTOR_COOKIE);
 };
 
-const requireAuthentication = (req, res, next) => {
+const requireAuthentication = async (req, res, next) => {
   if (req.path.startsWith(LOGIN_PATH) || req.path === '/health') {
     return next();
   }
@@ -92,7 +107,7 @@ const requireAuthentication = (req, res, next) => {
   }
 
   try {
-    const claims = verifyToken(token);
+    const claims = await verifyToken(token);
     const actor = resolveActor(claims);
 
     if (!actor) {
@@ -100,7 +115,7 @@ const requireAuthentication = (req, res, next) => {
     }
 
     req.auth = { token, claims, actor };
-    next();
+    return next();
   } catch (error) {
     clearAuthCookies(res);
 
@@ -122,7 +137,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', proxy: 'datahub', timestamp: new Date().toISOString() });
 });
 
-app.get(LOGIN_PATH, (req, res) => {
+app.get(LOGIN_PATH, async (req, res) => {
   const token = req.query.token || req.query.jwt || req.query.sso_token;
   const redirectUrl = req.query.redirect_url || '/';
 
@@ -131,7 +146,7 @@ app.get(LOGIN_PATH, (req, res) => {
   }
 
   try {
-    const claims = verifyToken(token);
+    const claims = await verifyToken(token);
     const actor = resolveActor(claims);
 
     if (!actor) {
