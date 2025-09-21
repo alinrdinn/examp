@@ -9,12 +9,10 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 9003;
 
-// Middleware
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
@@ -38,14 +36,13 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    httpOnly: true, // Session cookie should be httpOnly for security
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
     sameSite: 'lax'
   },
   name: 'sso-session'
 }));
 
-// JWKS Client for JWT verification
 const client = jwksClient({
   jwksUri: process.env.JWKS_URI || 'http://keycloak-for-datahub:8180/realms/auth-party/protocol/openid-connect/certs'
 });
@@ -60,7 +57,6 @@ function getKey(header, callback) {
   });
 }
 
-// JWT Verification Function
 function verifyJWT(token) {
   return new Promise((resolve, reject) => {
     jwt.verify(token, getKey, {
@@ -77,14 +73,10 @@ function verifyJWT(token) {
   });
 }
 
-// PENTING: Fungsi untuk check authentication
 function isAuthenticated(req) {
   return !!(req.session && req.session.authenticated);
 }
 
-// ===== CRITICAL: DataHub Authentication Endpoints =====
-
-// PENTING: DataHub memanggil endpoint ini untuk cek authentication
 app.get('/authenticate/check', (req, res) => {
   if (isAuthenticated(req)) {
     return res.json({
@@ -104,7 +96,6 @@ app.get('/authenticate/check', (req, res) => {
   }
 });
 
-// PENTING: DataHub current user endpoint
 app.get('/api/v2/me', (req, res) => {
   if (!isAuthenticated(req)) {
     return res.status(401).json({ 
@@ -122,7 +113,6 @@ app.get('/api/v2/me', (req, res) => {
     lastName: user.lastName,
     title: user.title || '',
     image: user.image || null,
-    // PENTING: Privileges yang cukup untuk akses DataHub
     privileges: [
       "MANAGE_USERS", 
       "MANAGE_POLICIES", 
@@ -146,19 +136,17 @@ app.get('/api/v2/me', (req, res) => {
   });
 });
 
-// PENTING: DataHub config endpoints - CONFIGURE AUTHENTICATION TYPE
 app.get('/config', (req, res) => {
   res.json({
     config: {
-      authType: "OIDC", // PENTING: Set ke OIDC bukan INTERNAL
+      authType: "OIDC",
       isNativeUserCreationEnabled: false,
       isSSOEnabled: true,
-      oidcEnabled: true, // PENTING: Enable OIDC
+      oidcEnabled: true,
       jaasEnabled: false,
       viewsConfig: {
         enabled: true
       },
-      // PENTING: Disable native login UI
       showBrowseV2: true,
       authConfig: {
         baseUrl: "http://localhost:9003"
@@ -170,7 +158,7 @@ app.get('/config', (req, res) => {
 app.get('/api/v1/config', (req, res) => {
   res.json({
     config: {
-      authType: "OIDC", // PENTING: Set ke OIDC
+      authType: "OIDC",
       isNativeUserCreationEnabled: false,
       isSSOEnabled: true,
       oidcEnabled: true
@@ -178,21 +166,17 @@ app.get('/api/v1/config', (req, res) => {
   });
 });
 
-// PENTING: Handle DataHub's /login endpoint
 app.get('/login', (req, res) => {
-  // Jika sudah authenticated, redirect ke tujuan
   if (isAuthenticated(req)) {
     const redirectUrl = req.query.redirect_uri || '/';
     return res.redirect(redirectUrl);
   }
   
-  // Jika belum authenticated, redirect ke SSO login
   const redirectUrl = req.query.redirect_uri || '/';
   const ssoLoginUrl = `/sso/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
   return res.redirect(ssoLoginUrl);
 });
 
-// DataHub logout endpoint
 app.post('/logOut', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
@@ -200,7 +184,6 @@ app.post('/logOut', (req, res) => {
       return res.status(500).json({ error: 'Logout failed' });
     }
     
-    // Clear cookies
     res.clearCookie('PLAY_SESSION');
     res.clearCookie('datahub_authenticated');
     res.clearCookie('sso-session');
@@ -209,14 +192,10 @@ app.post('/logOut', (req, res) => {
   });
 });
 
-// DataHub tracking endpoint
 app.post('/track', (req, res) => {
   res.json({ success: true });
 });
 
-// ===== SSO LOGIN ENDPOINTS =====
-
-// SSO Login via URL (for direct browser access)
 app.get('/sso/login', async (req, res) => {
   try {
     const { sso_token, redirect_url = '/' } = req.query;
@@ -224,11 +203,8 @@ app.get('/sso/login', async (req, res) => {
     if (!sso_token) {
       return res.status(400).send('SSO token is missing.');
     }
-
-    // Verify JWT token
     const decoded = await verifyJWT(sso_token);
     
-    // Extract user info
     const userInfo = {
       id: decoded.sub,
       username: decoded.preferred_username,
@@ -239,19 +215,15 @@ app.get('/sso/login', async (req, res) => {
       token: sso_token
     };
 
-    // Store in session
     req.session.user = userInfo;
     req.session.authenticated = true;
     req.session.authProvider = 'custom-sso';
 
-    // PENTING: Save session dan tunggu completion
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
         return res.status(500).send('Failed to save session.');
       }
-
-      // PENTING: Set cookies yang kompatibel dengan DataHub
       const cookieOptions = {
         httpOnly: false,
         secure: false,
@@ -260,13 +232,10 @@ app.get('/sso/login', async (req, res) => {
         domain: 'localhost'
       };
 
-      // Session cookie untuk DataHub
       res.cookie('PLAY_SESSION', req.sessionID, cookieOptions);
       
-      // Auth flag cookie
       res.cookie('datahub_authenticated', 'true', cookieOptions);
       
-      // PENTING: Set additional DataHub cookies
       res.cookie('actor', userInfo.username, cookieOptions);
       
       res.redirect(redirect_url);
@@ -278,17 +247,14 @@ app.get('/sso/login', async (req, res) => {
   }
 });
 
-// ===== MIDDLEWARE UNTUK PROXY =====
 
 const authMiddleware = (req, res, next) => {
-  // System dan auth endpoints yang tidak perlu auth
   const skipAuthPaths = [
     '/health', '/api/v2/health', '/api/health',
     '/authenticate', '/authenticate/', '/authenticate/check', '/login',
     '/logOut', '/sso/', '/api/v2/me', '/track', '/config', '/api/v1/config'
   ];
 
-  // Static assets
   const staticPatterns = [
     '/assets/', '/static/', '/public/', '/js/', '/css/', '/images/', '/img/',
     '/fonts/', '/font/', '/icons/', '/media/', '/_next/', '/webpack/',
@@ -302,7 +268,6 @@ const authMiddleware = (req, res, next) => {
     '.otf', '.json', '.xml', '.txt', '.map', '.wasm', '.pdf', '.zip'
   ];
 
-  // Check if should skip auth
   const shouldSkipAuth = 
     skipAuthPaths.some(path => req.path.startsWith(path)) ||
     staticPatterns.some(pattern => req.path.startsWith(pattern)) ||
@@ -317,9 +282,7 @@ const authMiddleware = (req, res, next) => {
     return next();
   }
 
-  // Check authentication
   if (!isAuthenticated(req)) {
-    // Untuk API calls, return JSON error
     if (req.path.startsWith('/api/') || req.headers.accept?.includes('application/json')) {
       return res.status(401).json({ 
         error: 'Not authenticated',
@@ -327,11 +290,9 @@ const authMiddleware = (req, res, next) => {
       });
     }
     
-    // Untuk page requests, redirect ke SSO login
     return res.redirect(`/sso/login?redirect_url=${encodeURIComponent(req.originalUrl)}`);
   }
 
-  // PENTING: Add user headers untuk DataHub
   if (req.session.user) {
     req.headers['X-DataHub-User'] = req.session.user.username;
     req.headers['X-DataHub-User-Email'] = req.session.user.email;
@@ -343,7 +304,6 @@ const authMiddleware = (req, res, next) => {
   next();
 };
 
-// Direct asset proxy - NO authentication required
 app.use(
   ['/assets', '/static', '/public', '/js', '/css', '/images', '/fonts'],
   createProxyMiddleware({
@@ -377,19 +337,17 @@ app.use(
   })
 );
 
-// ===== MAIN PROXY untuk semua DataHub requests =====
 app.use(
-  '/', // Proxy semua request
+  '/',
   (req, res, next) => {
-    // Skip jika sudah dihandle oleh endpoint lain
     if (req.path.startsWith('/sso/') || 
         req.path.startsWith('/health') ||
         req.path.startsWith('/debug/')) {
-      return next('route'); // Skip proxy
+      return next('route');
     }
     next();
   },
-  authMiddleware, // Apply auth middleware
+  authMiddleware,
   createProxyMiddleware({
     target: process.env.DATAHUB_FRONTEND_URL || 'http://datahub-frontend:9002',
     changeOrigin: true,
@@ -398,12 +356,10 @@ app.use(
     proxyTimeout: 60000,
     
     onProxyReq: (proxyReq, req, res) => {
-      // PENTING: Forward semua cookies
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
       }
       
-      // PENTING: Tambahkan session cookie jika authenticated
       if (isAuthenticated(req) && req.sessionID) {
         const sessionCookie = `PLAY_SESSION=${req.sessionID}; actor=${req.session.user.username}`;
         const existingCookies = proxyReq.getHeader('Cookie');
@@ -413,8 +369,7 @@ app.use(
           proxyReq.setHeader('Cookie', sessionCookie);
         }
       }
-      
-      // Add forwarding headers
+
       proxyReq.setHeader('X-Forwarded-For', req.ip);
       proxyReq.setHeader('X-Forwarded-Proto', req.protocol);
       proxyReq.setHeader('X-Forwarded-Host', req.get('Host'));
@@ -424,14 +379,12 @@ app.use(
     onProxyRes: (proxyRes, req, res) => {
       const path = req.path.toLowerCase();
       
-      // Set correct content types
       if (path.endsWith('.css') || path.includes('.chunk.css')) {
         proxyRes.headers['content-type'] = 'text/css; charset=utf-8';
       } else if (path.endsWith('.js') || path.includes('.chunk.js')) {
         proxyRes.headers['content-type'] = 'application/javascript; charset=utf-8';
       }
       
-      // CORS headers
       proxyRes.headers['Access-Control-Allow-Origin'] = '*';
       proxyRes.headers['Access-Control-Allow-Credentials'] = 'true';
       
@@ -452,12 +405,6 @@ app.use(
   })
 );
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'healthy' });
-});
-
-// Error handling
 app.use((error, req, res, next) => {
   console.error('❌ Global Error:', error);
   if (!res.headersSent) {
