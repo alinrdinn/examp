@@ -1,11 +1,10 @@
-// sso-proxy/index.js - FINAL FIX untuk DataHub Authentication
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
-const axios = require('axios');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 9003;
@@ -13,43 +12,34 @@ const PORT = process.env.PORT || 9003;
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
 
-// Enhanced CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = [
-    'http://localhost:9003',
-    'http://localhost:9002',
-    'http://localhost:3000',
-    'http://localhost:5236'
-  ];
-  
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-DataHub-User, X-DataHub-User-Email, X-DataHub-User-ID, Cookie');
-  
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  
-  next();
-});
+    const allowedOrigins = [
+      'http://localhost:9003',
+      'http://localhost:9002',
+      'http://localhost:3000',
+      'http://localhost:5236'
+    ];
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+}));
 
 app.use(session({
-  secret: 'datahub-sso-secret',
+  secret: process.env.SESSION_SECRET || 'datahub-sso-secret',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    httpOnly: false, // PENTING: Set false agar bisa diakses client-side
+    httpOnly: true, // Session cookie should be httpOnly for security
     sameSite: 'lax'
   },
   name: 'sso-session'
@@ -89,26 +79,14 @@ function verifyJWT(token) {
 
 // PENTING: Fungsi untuk check authentication
 function isAuthenticated(req) {
-  const sessionAuth = req.session && req.session.authenticated;
-  const cookieAuth = req.cookies && req.cookies.datahub_authenticated === 'true';
-  
-  return sessionAuth && cookieAuth;
+  return !!(req.session && req.session.authenticated);
 }
 
 // ===== CRITICAL: DataHub Authentication Endpoints =====
 
 // PENTING: DataHub memanggil endpoint ini untuk cek authentication
 app.get('/authenticate/check', (req, res) => {
-  console.log('🔍 /authenticate/check called');
-  console.log('🔍 Cookies:', req.cookies);
-  console.log('🔍 Session:', {
-    sessionId: req.sessionID,
-    authenticated: req.session.authenticated,
-    user: req.session.user ? req.session.user.username : 'none'
-  });
-  
   if (isAuthenticated(req)) {
-    console.log('✅ Authentication check SUCCESS');
     return res.json({
       authenticated: true,
       user: {
@@ -119,8 +97,7 @@ app.get('/authenticate/check', (req, res) => {
       }
     });
   } else {
-    console.log('❌ Authentication check FAILED - redirecting to SSO');
-    return res.status(401).json({ 
+    return res.status(401).json({
       authenticated: false,
       redirectUrl: '/sso/login?redirect_url=/'
     });
@@ -129,16 +106,13 @@ app.get('/authenticate/check', (req, res) => {
 
 // PENTING: DataHub current user endpoint
 app.get('/api/v2/me', (req, res) => {
-  console.log('🔍 /api/v2/me called');
   if (!isAuthenticated(req)) {
-    console.log('❌ /api/v2/me - Not authenticated');
     return res.status(401).json({ 
       error: 'Not authenticated',
       redirectUrl: '/sso/login?redirect_url=/'
     });
   }
 
-  console.log('✅ /api/v2/me - Returning user data');
   const user = req.session.user;
   return res.json({
     username: user.username,
@@ -174,7 +148,6 @@ app.get('/api/v2/me', (req, res) => {
 
 // PENTING: DataHub config endpoints - CONFIGURE AUTHENTICATION TYPE
 app.get('/config', (req, res) => {
-  console.log('🔍 /config called');
   res.json({
     config: {
       authType: "OIDC", // PENTING: Set ke OIDC bukan INTERNAL
@@ -195,7 +168,6 @@ app.get('/config', (req, res) => {
 });
 
 app.get('/api/v1/config', (req, res) => {
-  console.log('🔍 /api/v1/config called');
   res.json({
     config: {
       authType: "OIDC", // PENTING: Set ke OIDC
@@ -208,28 +180,23 @@ app.get('/api/v1/config', (req, res) => {
 
 // PENTING: Handle DataHub's /login endpoint
 app.get('/login', (req, res) => {
-  console.log('🔍 /login called with query:', req.query);
-  
   // Jika sudah authenticated, redirect ke tujuan
   if (isAuthenticated(req)) {
     const redirectUrl = req.query.redirect_uri || '/';
-    console.log('✅ Already authenticated, redirecting to:', redirectUrl);
     return res.redirect(redirectUrl);
   }
   
   // Jika belum authenticated, redirect ke SSO login
   const redirectUrl = req.query.redirect_uri || '/';
   const ssoLoginUrl = `/sso/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
-  console.log('🔒 Not authenticated, redirecting to SSO:', ssoLoginUrl);
   return res.redirect(ssoLoginUrl);
 });
 
 // DataHub logout endpoint
 app.post('/logOut', (req, res) => {
-  console.log('🔍 /logOut called');
   req.session.destroy((err) => {
     if (err) {
-      console.error('❌ Logout error:', err);
+      console.error('Logout error:', err);
       return res.status(500).json({ error: 'Logout failed' });
     }
     
@@ -238,14 +205,12 @@ app.post('/logOut', (req, res) => {
     res.clearCookie('datahub_authenticated');
     res.clearCookie('sso-session');
     
-    console.log('✅ User logged out successfully');
     res.json({ success: true });
   });
 });
 
 // DataHub tracking endpoint
 app.post('/track', (req, res) => {
-  console.log('📊 Tracking request received');
   res.json({ success: true });
 });
 
@@ -257,14 +222,7 @@ app.get('/sso/login', async (req, res) => {
     const { sso_token, redirect_url = '/' } = req.query;
     
     if (!sso_token) {
-      return res.status(400).send(`
-        <html><body>
-          <h2>Missing SSO Token</h2>
-          <p>Please provide sso_token parameter</p>
-          <p>Example: <code>/sso/login?sso_token=YOUR_JWT_TOKEN</code></p>
-          <p><a href="/health">Check proxy status</a></p>
-        </body></html>
-      `);
+      return res.status(400).send('SSO token is missing.');
     }
 
     // Verify JWT token
@@ -289,13 +247,8 @@ app.get('/sso/login', async (req, res) => {
     // PENTING: Save session dan tunggu completion
     req.session.save((err) => {
       if (err) {
-        console.error('❌ Session save error:', err);
-        return res.status(500).send(`
-          <html><body>
-            <h2>Session Error</h2>
-            <p>Failed to save session: ${err.message}</p>
-          </body></html>
-        `);
+        console.error('Session save error:', err);
+        return res.status(500).send('Failed to save session.');
       }
 
       // PENTING: Set cookies yang kompatibel dengan DataHub
@@ -315,127 +268,14 @@ app.get('/sso/login', async (req, res) => {
       
       // PENTING: Set additional DataHub cookies
       res.cookie('actor', userInfo.username, cookieOptions);
-
-      console.log('✅ SSO Login successful for user:', userInfo.username);
-      console.log('📋 Session ID:', req.sessionID);
       
-      // Redirect dengan delay untuk memastikan cookies tersimpan
-      setTimeout(() => {
-        console.log(`🚀 Redirecting to: ${redirect_url}`);
-        res.redirect(redirect_url);
-      }, 100);
+      res.redirect(redirect_url);
     });
 
   } catch (error) {
-    console.error('❌ SSO Login Error:', error);
-    res.status(401).send(`
-      <html><body>
-        <h2>Authentication Failed</h2>
-        <p>Invalid or expired token</p>
-        <pre>${error.message}</pre>
-        <p><a href="/health">Check proxy status</a></p>
-      </body></html>
-    `);
+    console.error('SSO Login Error:', error);
+    res.status(401).send('Authentication failed. Invalid or expired token.');
   }
-});
-
-// SSO Login via POST (for .NET application)
-app.post('/sso/login', async (req, res) => {
-  try {
-    const { access_token, redirect_url = '/' } = req.body;
-    
-    if (!access_token) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing access_token' 
-      });
-    }
-
-    // Verify JWT token
-    const decoded = await verifyJWT(access_token);
-    
-    // Extract user info
-    const userInfo = {
-      id: decoded.sub,
-      username: decoded.preferred_username,
-      email: decoded.email,
-      firstName: decoded.given_name,
-      lastName: decoded.family_name,
-      roles: decoded.realm_access?.roles || [],
-      token: access_token
-    };
-
-    // Store in session
-    req.session.user = userInfo;
-    req.session.authenticated = true;
-    req.session.authProvider = 'custom-sso';
-    
-    // Save session
-    req.session.save((err) => {
-      if (err) {
-        console.error('❌ Session save error:', err);
-        return res.status(500).json({ success: false, error: 'Session save failed' });
-      }
-      
-      // Set DataHub compatible cookies
-      const cookieOptions = {
-        httpOnly: false,
-        secure: false,
-        maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
-        domain: 'localhost'
-      };
-
-      res.cookie('PLAY_SESSION', req.sessionID, cookieOptions);
-      res.cookie('datahub_authenticated', 'true', cookieOptions);
-      res.cookie('actor', userInfo.username, cookieOptions);
-
-      console.log('✅ SSO Login successful for user:', userInfo.username);
-
-      res.json({
-        success: true,
-        message: 'SSO Login successful',
-        user: {
-          id: userInfo.id,
-          username: userInfo.username,
-          email: userInfo.email
-        },
-        redirect_url: redirect_url,
-        session_id: req.sessionID
-      });
-    });
-
-  } catch (error) {
-    console.error('❌ SSO Login Error:', error);
-    res.status(401).json({ 
-      success: false, 
-      error: 'Invalid or expired token' 
-    });
-  }
-});
-
-// User info endpoint
-app.get('/sso/user', (req, res) => {
-  if (!isAuthenticated(req)) {
-    return res.status(401).json({ authenticated: false });
-  }
-
-  res.json({
-    authenticated: true,
-    user: {
-      id: req.session.user.id,
-      username: req.session.user.username,
-      email: req.session.user.email,
-      firstName: req.session.user.firstName,
-      lastName: req.session.user.lastName,
-      roles: req.session.user.roles,
-      authProvider: req.session.authProvider
-    },
-    session: {
-      id: req.sessionID,
-      authenticated: req.session.authenticated
-    }
-  });
 });
 
 // ===== MIDDLEWARE UNTUK PROXY =====
@@ -474,14 +314,11 @@ const authMiddleware = (req, res, next) => {
     req.headers.accept?.includes('image/');
 
   if (shouldSkipAuth) {
-    console.log(`🟡 Skipping auth for: ${req.method} ${req.path}`);
     return next();
   }
 
   // Check authentication
   if (!isAuthenticated(req)) {
-    console.log(`🔒 Auth required for: ${req.method} ${req.path}`);
-    
     // Untuk API calls, return JSON error
     if (req.path.startsWith('/api/') || req.headers.accept?.includes('application/json')) {
       return res.status(401).json({ 
@@ -503,7 +340,6 @@ const authMiddleware = (req, res, next) => {
     req.headers['X-DataHub-Actor'] = req.session.user.username;
   }
 
-  console.log(`✅ Authenticated request for user ${req.session.user.username}: ${req.method} ${req.path}`);
   next();
 };
 
@@ -533,7 +369,7 @@ app.use(
     },
     
     onError: (err, req, res) => {
-      console.error(`❌ Asset proxy error for ${req.originalUrl}:`, err.message);
+      console.error(`Asset proxy error for ${req.originalUrl}:`, err.message);
       if (!res.headersSent) {
         res.status(404).send('Asset not found');
       }
@@ -562,8 +398,6 @@ app.use(
     proxyTimeout: 60000,
     
     onProxyReq: (proxyReq, req, res) => {
-      console.log(`📤 Proxy request: ${req.method} ${req.originalUrl}`);
-      
       // PENTING: Forward semua cookies
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
@@ -603,17 +437,10 @@ app.use(
       
       delete proxyRes.headers['x-frame-options'];
       delete proxyRes.headers['content-security-policy'];
-      
-      // Logging
-      if (proxyRes.statusCode >= 400) {
-        console.error(`❌ Proxy ERROR ${proxyRes.statusCode} for: ${req.originalUrl}`);
-      } else if (proxyRes.statusCode === 200) {
-        console.log(`✅ Proxy success: ${req.originalUrl}`);
-      }
     },
     
     onError: (err, req, res) => {
-      console.error(`❌ Proxy error for ${req.originalUrl}:`, err.message);
+      console.error(`Proxy error for ${req.originalUrl}:`, err.message);
       if (!res.headersSent) {
         res.status(500).json({
           error: 'Proxy Error',
@@ -625,51 +452,9 @@ app.use(
   })
 );
 
-// Debug endpoint
-app.get('/debug/auth', (req, res) => {
-  const sessionAuth = req.session && req.session.authenticated;
-  const cookieAuth = req.cookies && req.cookies.datahub_authenticated === 'true';
-  
-  res.json({
-    timestamp: new Date().toISOString(),
-    authentication: {
-      sessionAuth: sessionAuth,
-      cookieAuth: cookieAuth,
-      isAuthenticated: isAuthenticated(req),
-      sessionId: req.sessionID,
-      user: req.session.user ? {
-        username: req.session.user.username,
-        email: req.session.user.email
-      } : null
-    },
-    cookies: req.cookies,
-    headers: {
-      'user-agent': req.headers['user-agent'],
-      'cookie': req.headers.cookie
-    }
-  });
-});
-
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy',
-    service: 'datahub-sso-proxy',
-    version: '3.1.0',
-    timestamp: new Date().toISOString(),
-    authentication: {
-      authenticated: isAuthenticated(req),
-      session_id: req.sessionID,
-      user: req.session.user ? req.session.user.username : null
-    },
-    endpoints: {
-      'SSO Login': 'GET /sso/login?sso_token=JWT_TOKEN',
-      'DataHub': 'GET /',
-      'Auth Check': 'GET /authenticate/check',
-      'User Info': 'GET /api/v2/me',
-      'Config': 'GET /config'
-    }
-  });
+  res.json({ status: 'healthy' });
 });
 
 // Error handling
@@ -684,20 +469,5 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 DataHub SSO Proxy v3.1 running on port ${PORT}`);
-  console.log(`📍 Key Features:`);
-  console.log(`   - Handles DataHub /login redirects properly`);
-  console.log(`   - Provides /authenticate/check endpoint`);
-  console.log(`   - Returns proper user data via /api/v2/me`);
-  console.log(`   - Configures DataHub as OIDC authentication`);
-  console.log(`🔧 Endpoints:`);
-  console.log(`   - SSO Login: http://localhost:${PORT}/sso/login?sso_token=JWT_TOKEN`);
-  console.log(`   - DataHub: http://localhost:${PORT}/`);
-  console.log(`   - Health: http://localhost:${PORT}/health`);
-  console.log(`🔍 Expected Flow:`);
-  console.log(`   1. User access http://localhost:${PORT}/`);
-  console.log(`   2. If not authenticated → redirects to /sso/login`);
-  console.log(`   3. After SSO login → redirects to DataHub dashboard`);
-  console.log(`   4. DataHub calls /authenticate/check → gets authenticated=true`);
-  console.log(`   5. DataHub shows dashboard ✅`);
+  console.log(`DataHub SSO Proxy is running on http://localhost:${PORT}`);
 });
